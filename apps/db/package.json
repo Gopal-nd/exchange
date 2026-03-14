@@ -9,8 +9,8 @@
     "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun src/index.ts",
-    "seed:db": " bun src/seed.ts",
-    "refresh:views": " bun src/cron.ts"
+    "seed": "bun src/seed.ts",
+    "refresh": "bun src/cron.ts"
   },
   "peerDependencies": {
     "typescript": "^5"

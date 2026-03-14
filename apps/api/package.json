@@ -6,6 +6,10 @@
   "devDependencies": {
     "@types/bun": "latest"
   },
+  "scripts": {
+    "start": "bun run index.ts",
+    "dev": "bun --watch index.ts"
+  },
   "peerDependencies": {
     "typescript": "^5"
   },

@@ -133,5 +133,5 @@ export const updateCandle = (data: {
 
 export const getTokenImage =(token:string):string =>{
 const img = staticTokenData.filter((f)=>f.symbol==token.split('_')[0].toLocaleLowerCase())
-return img[0].image
+return img[0]?.image
 }

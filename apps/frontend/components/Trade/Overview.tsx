@@ -21,9 +21,9 @@ const Overview = ({ token, isPerp,trade }: { token: string, isPerp: boolean,trad
     }
     if(!data)return  <div></div>
 
-    if (data?.length==0) {
-       return  <DataNotFound token={token}/>
-    }
+    // if (data?.length==0) {
+    //    return  <DataNotFound token={token}/>
+    // }
 
 
     return (
@@ -32,9 +32,9 @@ const Overview = ({ token, isPerp,trade }: { token: string, isPerp: boolean,trad
                 <div className="flex justify-between flex-row w-full gap-4">
                     <div className="flex flex-row shrink-0 gap-6">
                         <button className='flex gap-2 items-center'>
-                            <Image src={data && staticToken[0].image || ''} alt='image' width={1000} height={1000} className='h-5 w-5' />
+                            <Image src={data && staticToken[0]?.image || ''} alt='image' width={1000} height={1000} className='h-5 w-5' />
                             <div className='flex'>
-                                {data && data[0].symbol.split('_')[0].toUpperCase()}/<span className='text-med-emphasis'>USD</span>
+                                {data && data[0]?.symbol.split('_')[0].toUpperCase()}/<span className='text-med-emphasis'>USD</span>
                             </div>
 
                         </button>
@@ -58,8 +58,8 @@ const Overview = ({ token, isPerp,trade }: { token: string, isPerp: boolean,trad
                                 <p className="text-xs font-light text-med-emphasis">
                                     24H Change
                                 </p>
-                                <span className={`text-sm font-light tabular-nums ${Number(data[0].priceChange) >= 0 ? 'text-green-500' : 'text-red-500'} `}>
-                                    {Number(data[0].priceChange) >= 0 ? "" : ""}{Number(data[0].priceChange).toLocaleString()} {Number(data[0].priceChangePercent) >= 0 ? "" : ""}{(Number(data[0].priceChangePercent )*100).toFixed(2)}%
+                                <span className={`text-sm font-light tabular-nums ${Number(data[0]?.priceChange) >= 0 ? 'text-green-500' : 'text-red-500'} `}>
+                                    {Number(data[0]?.priceChange) >= 0 ? "" : ""}{Number(data[0]?.priceChange).toLocaleString()} {Number(data[0]?.priceChangePercent) >= 0 ? "" : ""}{(Number(data[0]?.priceChangePercent )*100).toFixed(2)}%
                                 </span>
                             </div>
 
@@ -69,7 +69,7 @@ const Overview = ({ token, isPerp,trade }: { token: string, isPerp: boolean,trad
                                     24H High
                                 </p>
                                 <span className="text-xs font-normal leading-4 tabular-nums text-high-emphasis">
-                                    {data[0].high}
+                                    {data[0]?.high}
                                 </span>
                             </div>
 
@@ -79,7 +79,7 @@ const Overview = ({ token, isPerp,trade }: { token: string, isPerp: boolean,trad
                                     24H Low
                                 </p>
                                 <span className="text-xs font-normal leading-4 tabular-nums text-high-emphasis">
-                                    {data[0].low}
+                                    {data[0]?.low}
                                 </span>
                             </div>
 
@@ -94,7 +94,7 @@ const Overview = ({ token, isPerp,trade }: { token: string, isPerp: boolean,trad
                                         24H Volume (USD)
                                     </p>
                                     <span className="text-xs font-normal leading-4 tabular-nums text-high-emphasis">
-                                        {Intl.NumberFormat("en-US").format(Number(data[0].quoteVolume))}
+                                        {data[0]?.quoteVolume ? Intl.NumberFormat("en-US").format(Number(data[0]?.quoteVolume)) : 0}
 
                                     </span>
                                 </div>

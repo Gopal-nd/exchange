@@ -5,12 +5,14 @@ import { Router } from "express";
 const pgClient = new Client({
     user: 'root',
     host: 'localhost',
-    database: 'exhange',
+    database: 'exchange',
     password: 'root',
     port: 5432,
 });
 
-pgClient.connect();
+pgClient.connect()
+.then(() => console.log("Connected to TimescaleDB"))
+.catch(err => console.error("Connection error", err));
 
 export const klineRouter = Router();
 

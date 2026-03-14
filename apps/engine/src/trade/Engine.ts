@@ -1,9 +1,10 @@
 import fs from "fs";
 import { RedisManager } from "../RedisManager";
 import { ORDER_UPDATE, TRADE_ADDED } from "../types/index";
-import { CANCEL_ORDER, CREATE_ORDER, GET_DEPTH, GET_OPEN_ORDERS,type  MessageFromApi, ON_RAMP } from "../types/fromApi";
-import { OrderBook, type Fill, type Order } from "./orderBook";
+import { CANCEL_ORDER, CREATE_ORDER, GET_DEPTH, GET_OPEN_ORDERS, MessageFromApi, ON_RAMP } from "../types/fromApi";
+import { Fill, Order, Orderbook } from "./Orderbook";
 
+//TODO: Avoid floats everywhere, use a decimal similar to the PayTM project for every currency
 export const BASE_CURRENCY = "INR";
 
 interface UserBalance {
@@ -14,7 +15,7 @@ interface UserBalance {
 }
 
 export class Engine {
-    private orderbooks: OrderBook[] = [];
+    private orderbooks: Orderbook[] = [];
     private balances: Map<string, UserBalance> = new Map();
 
     constructor() {
@@ -29,10 +30,10 @@ export class Engine {
 
         if (snapshot) {
             const snapshotSnapshot = JSON.parse(snapshot.toString());
-            this.orderbooks = snapshotSnapshot.orderbooks.map((o: any) => new OrderBook(o.baseAsset, o.bids, o.asks, o.lastTradeId, o.currentPrice));
+            this.orderbooks = snapshotSnapshot.orderbooks.map((o: any) => new Orderbook(o.baseAsset, o.bids, o.asks, o.lastTradeId, o.currentPrice));
             this.balances = new Map(snapshotSnapshot.balances);
         } else {
-            this.orderbooks = [new OrderBook(`TATA`, [], [], 0, 0)];
+            this.orderbooks = [new Orderbook(`TATA`, [], [], 0, 0)];
             this.setBaseBalances();
         }
         setInterval(() => {
@@ -171,7 +172,7 @@ export class Engine {
         }
     }
 
-    addOrderbook(orderbook: OrderBook) {
+    addOrderbook(orderbook: Orderbook) {
         this.orderbooks.push(orderbook);
     }
 
@@ -185,7 +186,7 @@ export class Engine {
             throw new Error("No orderbook found");
         }
 
-        this.checkAndLockFunds(baseAsset!, quoteAsset!, side, userId, quoteAsset!, price, quantity);
+        this.checkAndLockFunds(baseAsset, quoteAsset, side, userId, quoteAsset, price, quantity);
 
         const order: Order = {
             price: Number(price),
@@ -197,7 +198,7 @@ export class Engine {
         }
         
         const { fills, executedQty } = orderbook.addOrder(order);
-        this.updateBalance(userId, baseAsset!, quoteAsset!, side, fills, executedQty);
+        this.updateBalance(userId, baseAsset, quoteAsset, side, fills, executedQty);
 
         this.createDbTrades(fills, market, userId);
         this.updateDbOrders(order, executedQty, fills, market);
@@ -223,7 +224,7 @@ export class Engine {
             RedisManager.getInstance().pushMessage({
                 type: ORDER_UPDATE,
                 data: {
-                    orderId: fill.marketOrderId,
+                    orderId: fill.markerOrderId,
                     executedQty: fill.qty
                 }
             });
@@ -389,7 +390,7 @@ export class Engine {
                 }
             });
         } else {
-            userBalance[BASE_CURRENCY]!.available += amount;
+            userBalance[BASE_CURRENCY].available += amount;
         }
     }
 
