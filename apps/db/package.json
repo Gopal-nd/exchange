@@ -6,7 +6,19 @@
   "devDependencies": {
     "@types/bun": "latest"
   },
+    "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun src/index.ts",
+    "seed:db": " bun src/seed.ts",
+    "refresh:views": " bun src/cron.ts"
+  },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@types/pg": "^8.18.0",
+    "@types/redis": "^4.0.11",
+    "pg": "^8.20.0",
+    "redis": "^5.11.0"
   }
 }
