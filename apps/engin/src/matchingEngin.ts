@@ -1,9 +1,4 @@
-import { bracketPairRange, retrieveRootparameters } from "elysia/dist/sucrose";
-
-const pair = "TATA-INR"
-
-
-enum Side {
+export enum Side {
     BUY = "BUY",
     SELL = "SELL"
 }
@@ -27,7 +22,7 @@ interface Trade {
 
 
 
-class Orderbook {
+export class Orderbook {
     private symbol:string;
     private bids: Order[] = []; // highest price first
     private asks: Order[] = []; // lowest price first
@@ -38,7 +33,7 @@ class Orderbook {
         this.symbol = symbol;
     }
 
-    addOrder(side:Side, price:number, quantity:number): Trade[] {
+    addOrder(side:Side, price:number, quantity:number): {orderId:string, trades:Trade[]} {
         const orderId = crypto.randomUUID();
         const order: Order = {
             orderId,
@@ -67,7 +62,7 @@ class Orderbook {
         }
         
             this.trades.push(...trades);
-            return trades;
+            return {orderId, trades};
     }
 
     private matchBuy(buy:Order):Trade[]{
@@ -224,41 +219,3 @@ class Orderbook {
     }
 }
 
-
-
-
-const book = new Orderbook("OPENAI-INR");
-book.addOrder(Side.BUY, 100, 10);
-book.addOrder(Side.SELL, 100, 10);
-book.addOrder(Side.BUY, 90, 10);
-book.addOrder(Side.SELL, 110, 10);
-book.addOrder(Side.BUY, 80, 10);
-book.addOrder(Side.SELL, 120, 10);
-book.addOrder(Side.BUY, 70, 10);
-book.addOrder(Side.SELL, 130, 10);
-book.addOrder(Side.BUY, 60, 10);
-book.addOrder(Side.SELL, 140, 10);
-book.addOrder(Side.BUY, 50, 10);
-book.addOrder(Side.SELL, 150, 10);
-
-
-book.printOrderbook();
-
-
-console.log(">>> Aggressive BUY ");
-const trades1 = book.addOrder(Side.BUY, 151.5, 150);
-console.log("Trades:", trades1);
-book.printOrderbook();
-
-console.log(">>> Aggressive SELL...");
-const trades2 = book.addOrder(Side.SELL, 149.0, 180);
-console.log("Trades:", trades2);
-book.printOrderbook();
-
-console.log(">>> Cancel best bid...");
-const bestBidOrder = book["bids"][0]; // for demo
-if (bestBidOrder) {
-  console.log(`Cancelling ${bestBidOrder.orderId}`);
-  book.cancleOrder(bestBidOrder.orderId);
-  book.printOrderbook();
-}

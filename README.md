@@ -18,3 +18,12 @@ This project will be a monorepo with typescipt as the programming language and f
 - engin
 
 `/packages` for the shared code
+
+
+
+
+
+
+# Engin
+
+- Understood the concept of the engine
