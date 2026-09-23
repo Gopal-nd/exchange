@@ -1,36 +1,42 @@
 import { Elysia } from "elysia";
-import {createClient} from 'redis'
+import { createClient } from "redis";
 import { CancelOrderSchema, OrderSchema } from "./types";
 
-const redis = createClient()
-redis.connect().then(()=> console.log('redis connected')).catch((err)=> console.error('redis connection error', err))
+const redis = createClient();
+await redis.connect();
+console.log("redis connected");
 
-async function toEngine(type:string, data:unknown){
-  const clientId = crypto.randomUUID()
+async function toEngine(type: string, data: unknown) {
+  const clientId = crypto.randomUUID();
+  const waiter = redis.duplicate();
+  await waiter.connect();
 
-  // send request to engine
-  await redis.lPush('order',JSON.stringify({clientId,type,data}))
-
-  // receive response from engine
-  const res = await redis.brPop(`response:${clientId}`, 5);
-
-  if (!res) throw new Error("engine timeout");  // if no response, throw an error in case of timeout
-
-  return JSON.parse(res.element);
+  try {
+    const wait = waiter.brPop(`response:${clientId}`, 5);
+    await redis.lPush("order", JSON.stringify({ clientId, type, data }));
+    const res = await wait;
+    if (!res) throw new Error("engine timeout");
+    return JSON.parse(res.element);
+  } finally {
+    await waiter.quit();
+  }
 }
+
 const app = new Elysia()
+  .onBeforeHandle(({ set }) => {
+    set.headers["Access-Control-Allow-Origin"] = "*";
+    set.headers["Access-Control-Allow-Methods"] = "GET,POST,DELETE,OPTIONS";
+    set.headers["Access-Control-Allow-Headers"] = "Content-Type";
+  })
+  .options("/*", () => "")
+  .get("/health", () => "ok")
+  .get("/depth", async () => toEngine("GET_DEPTH", {}))
+  .post("/order", async ({ body }) => toEngine("CREATE_ORDER", body), {
+    body: OrderSchema,
+  })
+  .delete("/order", async ({ body }) => toEngine("CANCEL_ORDER", body), {
+    body: CancelOrderSchema,
+  })
+  .listen(3000);
 
-app.get('/depth', async () => toEngine("GET_DEPTH", {}));
-
-app.post('/order', async ({ body }) => toEngine("CREATE_ORDER", body), {
-  body: OrderSchema,
-})
-
-app.delete('/order', async ({ body }) => toEngine("CANCEL_ORDER", body), {
-  body: CancelOrderSchema,
-})
-
-app.get('/health', () => "ok");
-
-app.listen(3000)
-console.log(`API on :${app.server?.port}`)
+console.log(`API on :${app.server?.port}`);

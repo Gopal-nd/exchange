@@ -8,8 +8,8 @@ export enum Side {
 export const OrderSchema = z.object({
   symbol: z.string(),
   side: z.enum([Side.BUY, Side.SELL]),
-  price: z.number(),
-  quantity: z.number(),
+  price: z.coerce.number(),
+  quantity: z.coerce.number(),
 })
 
 export type Order = z.infer<typeof OrderSchema>;
