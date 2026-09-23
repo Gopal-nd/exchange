@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { createClient } from "redis";
+import { z } from "zod";
 import { CancelOrderSchema, OrderSchema } from "./types";
 
 const redis = createClient();
@@ -31,6 +32,9 @@ const app = new Elysia()
   .options("/*", () => "")
   .get("/health", () => "ok")
   .get("/depth", async () => toEngine("GET_DEPTH", {}))
+  .get("/balance", async ({ query }) => toEngine("GET_BALANCE", query), {
+    query: z.object({ userId: z.string() }),
+  })
   .post("/order", async ({ body }) => toEngine("CREATE_ORDER", body), {
     body: OrderSchema,
   })

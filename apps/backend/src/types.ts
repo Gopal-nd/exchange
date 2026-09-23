@@ -10,6 +10,7 @@ export const OrderSchema = z.object({
   side: z.enum([Side.BUY, Side.SELL]),
   price: z.coerce.number(),
   quantity: z.coerce.number(),
+  userId: z.string(),
 })
 
 export type Order = z.infer<typeof OrderSchema>;

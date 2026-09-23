@@ -1,3 +1,5 @@
+import { Balances } from "./balances";
+
 export enum Side {
     BUY = "BUY",
     SELL = "SELL"
@@ -5,6 +7,7 @@ export enum Side {
 
 interface Order {
     orderId:string;
+    userId:string;
     side:Side;
     price:number;
     quantity:number;
@@ -18,9 +21,9 @@ interface Trade {
     timestamp:number;
     buyOrderId:string;
     sellOrderId:string;
+    buyerId:string;
+    sellerId:string;
 }
-
-
 
 export class Orderbook {
     private symbol:string;
@@ -28,15 +31,21 @@ export class Orderbook {
     private asks: Order[] = []; // lowest price first
     private trades: Trade[] = [];
     private orders: Map<string, Order> = new Map();
+    readonly balances = new Balances();
 
     constructor(symbol:string = "TATA-INR") {
         this.symbol = symbol;
     }
 
-    addOrder(side:Side, price:number, quantity:number): {orderId:string, trades:Trade[]} {
+    addOrder(side:Side, price:number, quantity:number, userId:string): {orderId:string, trades:Trade[]} {
+        // lock funds before matching
+        if (side === Side.BUY) this.balances.lock(userId, "INR", price * quantity);
+        else this.balances.lock(userId, "TATA", quantity);
+
         const orderId = crypto.randomUUID();
         const order: Order = {
             orderId,
+            userId,
             side,
             price,
             quantity,
@@ -46,7 +55,6 @@ export class Orderbook {
         
             let trades: Trade[] = [];
 
-        // match logic here
         if(side === Side.BUY){
             trades = this.matchBuy(order);
             if(order.remaining > 0){
@@ -65,6 +73,16 @@ export class Orderbook {
             return {orderId, trades};
     }
 
+    private settle(buyerId:string, sellerId:string, price:number, qty:number, buyLimit:number) {
+        // buyer reserved buyLimit*qty; actual cost price*qty
+        this.balances.spendLocked(buyerId, "INR", price * qty);
+        this.balances.unlock(buyerId, "INR", (buyLimit - price) * qty);
+        this.balances.credit(buyerId, "TATA", qty);
+
+        this.balances.spendLocked(sellerId, "TATA", qty);
+        this.balances.credit(sellerId, "INR", price * qty);
+    }
+
     private matchBuy(buy:Order):Trade[]{
         const trades:Trade[] = [];
 
@@ -75,12 +93,16 @@ export class Orderbook {
 
             const qty = Math.min(buy.remaining,bestAsk.remaining);
 
+            this.settle(buy.userId, bestAsk.userId, bestAsk.price, qty, buy.price);
+
             trades.push({
                 price: bestAsk.price,
                 quantity: qty,
                 timestamp: Date.now(),
                 buyOrderId: buy.orderId,
                 sellOrderId: bestAsk.orderId,
+                buyerId: buy.userId,
+                sellerId: bestAsk.userId,
             });
 
             buy.remaining -= qty;
@@ -104,12 +126,17 @@ export class Orderbook {
             if(sell.price > bestBid.price) break;
 
             const qty = Math.min(sell.remaining,bestBid.remaining)
+
+            this.settle(bestBid.userId, sell.userId, bestBid.price, qty, bestBid.price);
+
             trades.push({
                 price: bestBid.price,
                 quantity: qty,
                 timestamp: Date.now(),
                 buyOrderId: bestBid.orderId,
                 sellOrderId: sell.orderId,
+                buyerId: bestBid.userId,
+                sellerId: sell.userId,
             });
 
             sell.remaining -= qty;
@@ -160,6 +187,8 @@ export class Orderbook {
         if(index !== -1){
             book.splice(index,1)
             this.orders.delete(orderId)
+            if (order.side === Side.BUY) this.balances.unlock(order.userId, "INR", order.price * order.remaining);
+            else this.balances.unlock(order.userId, "TATA", order.remaining);
             return true
         }
         return false
@@ -192,30 +221,7 @@ export class Orderbook {
         }
     }
 
-    printOrderbook(level:number = 5){
-        console.log("==== orderbook of ", this.symbol," ====");
-        console.log(`${"Best (buy)".padEnd(25)} | Ask (sell)` );
-        console.log("-".repeat(50));
-        const bids = this.bids.slice(0,level);
-        const asks = this.asks.slice(0,level);
-        const maxlength = Math.max(bids.length,asks.length);
-
-        for(let i = 0; i < maxlength; i++){
-            const bidStr = i < bids.length ?  `${bids[i].remaining.toFixed(2).padEnd(5)} @ ${bids[i].price.toFixed(2)}` : "".padEnd(5);
-            const askStr = i < asks.length ?  `${asks[i].remaining.toFixed(2).padEnd(5)} @ ${asks[i].price.toFixed(2)}` : "".padEnd(5);
-            console.log(`${bidStr} | ${askStr}`);
-        }
-        console.log("-".repeat(50));
-        console.log("Best Bid: ", this.bestBid());
-        console.log("Best Ask: ", this.bestAsk());
-        console.log("Spread: ", this.spread());
-        console.log("Midprice: ", this.midprice());
-        console.log("open orders size: ", this.orders.size);
-        console.log("trades size: ", this.trades.length);
-    }
-
     getTrades():Trade[]{
         return [...this.trades];
     }
 }
-

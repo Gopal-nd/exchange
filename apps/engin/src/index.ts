@@ -20,13 +20,15 @@ while (true) {
     let broadcast = false;
 
     if (type === "CREATE_ORDER") {
-      result = book.addOrder(data.side as Side, data.price, data.quantity);
+      result = book.addOrder(data.side as Side, data.price, data.quantity, data.userId);
       broadcast = true;
     } else if (type === "CANCEL_ORDER") {
       result = { success: book.cancleOrder(data.orderId) };
       broadcast = true;
     } else if (type === "GET_DEPTH") {
       result = book.depth();
+    } else if (type === "GET_BALANCE") {
+      result = book.balances.get(data.userId);
     } else {
       result = { error: "unknown type" };
     }
