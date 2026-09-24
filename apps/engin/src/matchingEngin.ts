@@ -24,6 +24,7 @@ interface Trade {
     sellOrderId:string;
     buyerId:string;
     sellerId:string;
+    side: Side; // aggressor / taker side
 }
 
 export class Orderbook {
@@ -146,6 +147,7 @@ export class Orderbook {
                 sellOrderId: bestAsk.orderId,
                 buyerId: buy.userId,
                 sellerId: bestAsk.userId,
+                side: Side.BUY,
             });
 
             buy.remaining -= qty;
@@ -180,6 +182,7 @@ export class Orderbook {
                 sellOrderId: sell.orderId,
                 buyerId: bestBid.userId,
                 sellerId: sell.userId,
+                side: Side.SELL,
             });
 
             sell.remaining -= qty;

@@ -9,8 +9,8 @@
  */
 const API = process.env.API_URL ?? "http://localhost:3000";
 const MARKETS = ["TATA-INR", "ICICI-INR"];
-const TICK_MS = Number(process.env.MM_TICK_MS ?? 1);
-const N = 15;
+const TICK_MS = Number(process.env.MM_TICK_MS ?? 10);
+const N = 5;
 
 type Account = { userId: string; password: string };
 type Depth = { bids: [number, number][]; asks: [number, number][] };

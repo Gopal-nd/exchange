@@ -11,7 +11,14 @@ function ensureDir() {
 
 export function loadSnapshot() {
   if (!fs.existsSync(SNAPSHOT)) return null;
-  return JSON.parse(fs.readFileSync(SNAPSHOT, "utf8"));
+  const raw = fs.readFileSync(SNAPSHOT, "utf8").trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    console.warn("snapshot.json corrupt/empty — starting fresh");
+    return null;
+  }
 }
 
 export function saveSnapshot(book: unknown) {
@@ -28,11 +35,19 @@ export function appendEvent(event: { type: string; data: unknown }) {
 // load all events from the events.jsonl file
 export function loadEvents(): { type: string; data: any }[] {
   if (!fs.existsSync(EVENTS)) return [];
-  return fs
-    .readFileSync(EVENTS, "utf8")
+  const raw = fs.readFileSync(EVENTS, "utf8").trim();
+  if (!raw) return [];
+  return raw
     .split("\n")
     .filter(Boolean)
-    .map((line) => JSON.parse(line));
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        console.warn("skipping bad event line");
+        return [];
+      }
+    });
 }
 
 // clear the events.jsonl file once the snapshot is saved

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   keys,
@@ -8,15 +8,44 @@ import {
   useMarkets,
   usePlaceOrder,
   useTrades,
+  type Candle,
   type Trade,
 } from "../api";
+import CandleChart from "../components/CandleChart";
 
 const WS = "ws://localhost:3002";
+const CANDLE_MS = 5_000;
 const field =
   "mt-1 w-full rounded-md border border-line bg-panel px-2.5 py-2 text-sm outline-none focus:border-ink";
 const label = "flex flex-col text-[11px] font-medium uppercase tracking-wide text-muted";
 const panel = "rounded-xl border border-line bg-panel p-4";
 const h2 = "mb-3 text-xs font-semibold uppercase tracking-wider text-muted";
+
+/** Build OHLC buckets from trades (UI-only — engine stays clean). */
+function tradesToCandles(trades: Trade[], intervalMs = CANDLE_MS): Candle[] {
+  const map = new Map<number, Candle>();
+  // trades arrive newest-first; process oldest → newest
+  for (const t of [...trades].reverse()) {
+    const time = Math.floor(t.timestamp / intervalMs) * intervalMs;
+    const c = map.get(time);
+    if (!c) {
+      map.set(time, {
+        time,
+        open: t.price,
+        high: t.price,
+        low: t.price,
+        close: t.price,
+        volume: t.quantity,
+      });
+    } else {
+      c.high = Math.max(c.high, t.price);
+      c.low = Math.min(c.low, t.price);
+      c.close = t.price;
+      c.volume += t.quantity;
+    }
+  }
+  return [...map.values()].sort((a, b) => a.time - b.time);
+}
 
 export default function TradePage() {
   const userId = localStorage.getItem("userId") || "";
@@ -39,6 +68,13 @@ export default function TradePage() {
   const depth = depthQ.data ?? { bids: [], asks: [] };
   const trades = tradesQ.data ?? [];
   const balances = balanceQ.data ?? {};
+  const candles = useMemo(() => tradesToCandles(trades), [trades]);
+
+  const lastPrice = trades[0]?.price ?? null;
+  const bestBid = depth.bids[0]?.[0] ?? null;
+  const bestAsk = depth.asks[0]?.[0] ?? null;
+  const mid =
+    bestBid != null && bestAsk != null ? (bestBid + bestAsk) / 2 : lastPrice;
 
   useEffect(() => {
     if (markets[0] && !markets.includes(symbol)) setSymbol(markets[0]);
@@ -52,12 +88,11 @@ export default function TradePage() {
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.type === "connected") return;
-      // Market data comes over WS — update cache only, no HTTP
       if (data.symbol !== symbol) return;
       if (data.depth) qc.setQueryData(keys.depth(symbol), data.depth);
       if (data.trades?.length) {
         qc.setQueryData(keys.trades(symbol), (prev: Trade[] | undefined) =>
-          [...data.trades].reverse().concat(prev ?? []).slice(0, 30)
+          [...data.trades].reverse().concat(prev ?? []).slice(0, 200)
         );
       }
     };
@@ -128,7 +163,7 @@ export default function TradePage() {
         </button>
       </nav>
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      <div className="mb-4 flex flex-wrap items-end gap-4">
         <label className={label}>
           Market
           <select className={field} value={symbol} onChange={(e) => setSymbol(e.target.value)}>
@@ -139,6 +174,18 @@ export default function TradePage() {
             ))}
           </select>
         </label>
+        <div className="pb-1">
+          <div className="text-[11px] uppercase text-muted">Last</div>
+          <div className="font-mono text-2xl font-semibold tabular-nums">
+            {lastPrice != null ? lastPrice.toFixed(2) : "—"}
+          </div>
+        </div>
+        <div className="pb-1">
+          <div className="text-[11px] uppercase text-muted">Mid</div>
+          <div className="font-mono text-lg tabular-nums text-muted">
+            {mid != null ? Number(mid).toFixed(2) : "—"}
+          </div>
+        </div>
         <button
           type="button"
           onClick={refresh}
@@ -148,9 +195,22 @@ export default function TradePage() {
         </button>
       </div>
 
+      <section className={`${panel} mb-4`}>
+        <h2 className={h2}>Price · 5s candles</h2>
+        {candles.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted">Waiting for trades…</p>
+        ) : (
+          <CandleChart candles={candles} />
+        )}
+      </section>
+
       <div className="grid gap-4 lg:grid-cols-4">
         <section className={panel}>
           <h2 className={h2}>Order book</h2>
+          <div className="mb-2 rounded-md bg-paper px-2 py-1.5 text-center font-mono text-sm tabular-nums">
+            <span className="text-[11px] uppercase text-muted">Last </span>
+            <span className="font-semibold">{lastPrice != null ? lastPrice.toFixed(2) : "—"}</span>
+          </div>
           <div className="grid grid-cols-2 gap-3 font-mono text-sm tabular-nums">
             <div>
               <div className="mb-1 text-[11px] uppercase text-muted">Ask</div>
@@ -184,9 +244,18 @@ export default function TradePage() {
           <div className="max-h-64 space-y-0.5 overflow-y-auto font-mono text-sm tabular-nums">
             {trades.length === 0 && <p className="text-sm text-muted">No trades yet</p>}
             {trades.map((t, i) => (
-              <div key={`${t.timestamp}-${i}`} className="flex justify-between rounded bg-paper px-2 py-1">
+              <div
+                key={`${t.timestamp}-${i}`}
+                className="flex items-center justify-between gap-2 rounded bg-paper px-2 py-1"
+              >
+                <span className={t.side === "SELL" ? "text-sell" : "text-buy"}>
+                  {t.side === "SELL" ? "SELL" : "BUY"}
+                </span>
                 <span>{t.price}</span>
                 <span className="text-muted">{t.quantity}</span>
+                <span className="text-[11px] text-muted">
+                  {new Date(t.timestamp).toLocaleTimeString()}
+                </span>
               </div>
             ))}
           </div>

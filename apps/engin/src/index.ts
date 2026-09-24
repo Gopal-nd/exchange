@@ -47,7 +47,7 @@ function apply(type: string, data: any) {
     return { success: book(data.symbol).cancleOrder(data.orderId) };
   }
   if (type === "GET_DEPTH") return book(data.symbol).depth();
-  if (type === "GET_TRADES") return book(data.symbol).getTrades().slice(-30).reverse();
+  if (type === "GET_TRADES") return book(data.symbol).getTrades().slice(-200).reverse();
   if (type === "GET_OPEN_ORDERS") {
     return Object.values(books).flatMap((b) => b.openOrders(data.userId));
   }

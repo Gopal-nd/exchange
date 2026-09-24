@@ -8,12 +8,21 @@ const api = axios.create({ baseURL: "http://localhost:3000" });
 export type Depth = { bids: [number, number][]; asks: [number, number][] };
 export type Balances = Record<string, { available: number; locked: number }>;
 
+export type Candle = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
 export type Trade = {
   price: number;
   quantity: number;
   timestamp: number;
-  symbol?: string;
   side?: string;
+  symbol?: string;
   status?: string;
 };
 
