@@ -1,10 +1,19 @@
-import { Button } from "@repo/ui/button"
-const App = () => {
-  return (
-    <div className='p-2 flex justify-center items-center '>
-      < Button className="bg-blue-500 text-white p-2 rounded-md" appName="Lets Build the Centralized Exchange">Let's Go</Button>
-    </div>
-  )
-}
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import LoginPage from "./pages/Login";
+import OrdersPage from "./pages/Orders";
+import TradePage from "./pages/Trade";
+import WalletPage from "./pages/Wallet";
 
-export default App
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/trade" element={<TradePage />} />
+        <Route path="/wallet" element={<WalletPage />} />
+        <Route path="/orders" element={<OrdersPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}

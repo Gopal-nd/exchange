@@ -21,19 +21,42 @@ function book(symbol: string) {
 }
 
 function apply(type: string, data: any) {
+  if (type === "INIT_USER") {
+    balances.initUser(data.userId);
+    return { ok: true };
+  }
+  if (type === "ON_RAMP") {
+    balances.credit(data.userId, data.asset, data.amount);
+    return { ok: true, balances: balances.get(data.userId) };
+  }
+  if (type === "OFF_RAMP") {
+    balances.debit(data.userId, data.asset, data.amount);
+    return { ok: true, balances: balances.get(data.userId) };
+  }
   if (type === "CREATE_ORDER") {
     return book(data.symbol).addOrder(
       data.side as Side,
-      data.price,
+      data.price ?? 0,
       data.quantity,
       data.userId,
-      data.orderId
+      data.orderId,
+      data.orderType === "MARKET" ? "MARKET" : "LIMIT"
     );
   }
   if (type === "CANCEL_ORDER") {
     return { success: book(data.symbol).cancleOrder(data.orderId) };
   }
   if (type === "GET_DEPTH") return book(data.symbol).depth();
+  if (type === "GET_TRADES") return book(data.symbol).getTrades().slice(-30).reverse();
+  if (type === "GET_OPEN_ORDERS") {
+    return Object.values(books).flatMap((b) => b.openOrders(data.userId));
+  }
+  if (type === "GET_MY_FILLS") {
+    return Object.values(books)
+      .flatMap((b) => b.tradesFor(data.userId))
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 50);
+  }
   if (type === "GET_BALANCE") return balances.get(data.userId);
   if (type === "GET_MARKETS") return MARKETS;
   return { error: "unknown type" };
@@ -54,10 +77,6 @@ function loadEngineSnapshot(snap: any) {
     for (const [sym, s] of Object.entries(snap.books) as [string, any][]) {
       if (books[sym]) books[sym].loadSnapshot(s);
     }
-  } else if (snap?.symbol && books[snap.symbol]) {
-    // old single-book snapshot
-    books[snap.symbol].loadSnapshot(snap);
-    if (snap.balances) balances.load(snap.balances);
   }
 }
 
@@ -86,6 +105,14 @@ const redis = createClient();
 await redis.connect();
 console.log("engine connected to redis");
 
+const MUTATE = new Set([
+  "CREATE_ORDER",
+  "CANCEL_ORDER",
+  "ON_RAMP",
+  "OFF_RAMP",
+  "INIT_USER",
+]);
+
 while (true) {
   const res = await redis.brPop("order", 0);
   if (!res) continue;
@@ -104,17 +131,17 @@ while (true) {
       result = apply(type, data);
       appendEvent({ type, data });
       broadcast = true;
-    } else if (type === "CANCEL_ORDER") {
+    } else if (MUTATE.has(type)) {
       result = apply(type, data);
       appendEvent({ type, data });
-      broadcast = true;
+      if (type === "CANCEL_ORDER") broadcast = true;
     } else {
       result = apply(type, data);
     }
 
     await redis.lPush(`response:${clientId}`, JSON.stringify(result));
 
-    if (broadcast) {
+    if (broadcast && data.symbol) {
       await redis.publish(
         "ws",
         JSON.stringify({

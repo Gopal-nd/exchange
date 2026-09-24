@@ -13,6 +13,7 @@ interface Order {
     quantity:number;
     remaining:number;
     timestamp:number;
+    orderType?: "LIMIT" | "MARKET";
 }
 
 interface Trade {
@@ -43,39 +44,76 @@ export class Orderbook {
         this.balances = balances;
     }
 
-    addOrder(side:Side, price:number, quantity:number, userId:string, orderId = crypto.randomUUID()): {orderId:string, trades:Trade[]} {
-        // lock funds before matching
-        if (side === Side.BUY) this.balances.lock(userId, this.quote, price * quantity);
-        else this.balances.lock(userId, this.base, quantity);
+    addOrder(
+        side: Side,
+        price: number,
+        quantity: number,
+        userId: string,
+        orderId = crypto.randomUUID(),
+        orderType: "LIMIT" | "MARKET" = "LIMIT"
+    ): { orderId: string; trades: Trade[]; orderType: string } {
+        let limitPrice = price;
+
+        if (orderType === "MARKET") {
+            if (side === Side.BUY) {
+                if (this.asks.length === 0) throw new Error("no liquidity");
+                let left = quantity;
+                let cost = 0;
+                for (const a of this.asks) {
+                    const take = Math.min(left, a.remaining);
+                    cost += take * a.price;
+                    limitPrice = a.price;
+                    left -= take;
+                    if (left <= 0) break;
+                }
+                if (left > 0) throw new Error("insufficient liquidity");
+                this.balances.lock(userId, this.quote, cost);
+                // match as aggressive limit at last ask level touched
+            } else {
+                if (this.bids.length === 0) throw new Error("no liquidity");
+                let left = quantity;
+                for (const b of this.bids) {
+                    left -= Math.min(left, b.remaining);
+                    if (left <= 0) break;
+                }
+                if (left > 0) throw new Error("insufficient liquidity");
+                this.balances.lock(userId, this.base, quantity);
+                limitPrice = 0; // take any bid
+            }
+        } else {
+            if (side === Side.BUY) this.balances.lock(userId, this.quote, price * quantity);
+            else this.balances.lock(userId, this.base, quantity);
+        }
 
         const order: Order = {
             orderId,
             userId,
             side,
-            price,
+            price: limitPrice,
             quantity,
             remaining: quantity,
             timestamp: Date.now(),
-        }
-        
-            let trades: Trade[] = [];
+            orderType,
+        };
 
-        if(side === Side.BUY){
+        let trades: Trade[] = [];
+
+        if (side === Side.BUY) {
             trades = this.matchBuy(order);
-            if(order.remaining > 0){
+            if (order.remaining > 0 && orderType === "LIMIT") {
                 this.orders.set(orderId, order);
                 this.insertBid(order);
             }
         } else {
             trades = this.matchSell(order);
-            if(order.remaining > 0){
+            if (order.remaining > 0 && orderType === "LIMIT") {
                 this.orders.set(orderId, order);
                 this.insertAsk(order);
             }
         }
-        
-            this.trades.push(...trades);
-            return {orderId, trades};
+
+        this.trades.push(...trades);
+        return { orderId, trades, orderType };
     }
 
     private settle(buyerId:string, sellerId:string, price:number, qty:number, buyLimit:number) {
@@ -97,7 +135,8 @@ export class Orderbook {
 
             const qty = Math.min(buy.remaining,bestAsk.remaining);
 
-            this.settle(buy.userId, bestAsk.userId, bestAsk.price, qty, buy.price);
+            const buyLimit = buy.orderType === "MARKET" ? bestAsk.price : buy.price;
+            this.settle(buy.userId, bestAsk.userId, bestAsk.price, qty, buyLimit);
 
             trades.push({
                 price: bestAsk.price,
@@ -227,6 +266,34 @@ export class Orderbook {
 
     getTrades():Trade[]{
         return [...this.trades];
+    }
+
+    openOrders(userId: string) {
+        return [...this.orders.values()]
+            .filter((o) => o.userId === userId && o.remaining > 0)
+            .map((o) => ({
+                orderId: o.orderId,
+                userId: o.userId,
+                side: o.side,
+                price: o.price,
+                quantity: o.quantity,
+                remaining: o.remaining,
+                filled: o.quantity - o.remaining,
+                status: "OPEN" as const,
+                symbol: this.symbol,
+                timestamp: o.timestamp,
+            }));
+    }
+
+    tradesFor(userId: string) {
+        return this.trades
+            .filter((t) => t.buyerId === userId || t.sellerId === userId)
+            .map((t) => ({
+                ...t,
+                symbol: this.symbol,
+                side: t.buyerId === userId ? "BUY" : "SELL",
+                status: "FILLED" as const,
+            }));
     }
 
     getSnapshot() {

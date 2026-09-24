@@ -7,13 +7,19 @@ export class Balances {
     if (!this.users.has(userId)) this.users.set(userId, {});
   }
 
+  /** New registered user starts at zero — use on-ramp to fund */
+  initUser(userId: string) {
+    this.users.set(userId, {
+      INR: { available: 0, locked: 0 },
+      TATA: { available: 0, locked: 0 },
+      ICICI: { available: 0, locked: 0 },
+    });
+  }
+
   private wallet(userId: string, asset: string): Wallet {
     this.ensure(userId);
     const u = this.users.get(userId)!;
-    if (!u[asset]) {
-      // demo starting funds
-      u[asset] = { available: asset === "INR" ? 100_000 : 1_000, locked: 0 };
-    }
+    if (!u[asset]) u[asset] = { available: 0, locked: 0 };
     return u[asset];
   }
 
@@ -44,7 +50,16 @@ export class Balances {
   }
 
   credit(userId: string, asset: string, amount: number) {
+    if (amount <= 0) throw new Error("amount must be > 0");
     this.wallet(userId, asset).available += amount;
+  }
+
+  /** Off-ramp: withdraw from available */
+  debit(userId: string, asset: string, amount: number) {
+    if (amount <= 0) throw new Error("amount must be > 0");
+    const w = this.wallet(userId, asset);
+    if (w.available < amount) throw new Error(`insufficient ${asset}`);
+    w.available -= amount;
   }
 
   toJSON() {
@@ -52,6 +67,6 @@ export class Balances {
   }
 
   load(entries: [string, Record<string, Wallet>][]) {
-    this.users = new Map(entries);
+    this.users = new Map(entries ?? []);
   }
 }

@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "elysia": "latest",
+    "mongodb": "6.12.0",
     "redis": "^6.2.1",
     "zod": "^4.6.5"
   },
