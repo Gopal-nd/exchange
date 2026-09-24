@@ -19,11 +19,12 @@ This project will be a monorepo with typescipt as the programming language and f
 
 `/packages` for the shared code
 
-
-
-
-
-
 # Engin
 
 - Understood the concept of the engine
+
+### Engine durability TODO
+
+- [x] Step 1: Periodic + shutdown snapshot (`snapshot.json`)
+- [x] Step 2: Event log between snapshots (`events.jsonl`)
+- [ ] Step 3: Redis processing list (`order` → `order:processing`) so a crash mid-message does not drop the job

@@ -4,40 +4,47 @@ export class Balances {
   private users = new Map<string, Record<string, Wallet>>();
 
   private ensure(userId: string) {
-    if (!this.users.has(userId)) {
-      this.users.set(userId, {
-        INR: { available: 100_000, locked: 0 },
-        TATA: { available: 1_000, locked: 0 },
-      });
+    if (!this.users.has(userId)) this.users.set(userId, {});
+  }
+
+  private wallet(userId: string, asset: string): Wallet {
+    this.ensure(userId);
+    const u = this.users.get(userId)!;
+    if (!u[asset]) {
+      // demo starting funds
+      u[asset] = { available: asset === "INR" ? 100_000 : 1_000, locked: 0 };
     }
+    return u[asset];
   }
 
   get(userId: string) {
     this.ensure(userId);
+    this.wallet(userId, "INR");
+    this.wallet(userId, "TATA");
+    this.wallet(userId, "ICICI");
     return this.users.get(userId)!;
   }
 
   lock(userId: string, asset: string, amount: number) {
-    const w = this.get(userId)[asset];
-    if (!w || w.available < amount) throw new Error(`insufficient ${asset}`);
+    const w = this.wallet(userId, asset);
+    if (w.available < amount) throw new Error(`insufficient ${asset}`);
     w.available -= amount;
     w.locked += amount;
   }
 
   unlock(userId: string, asset: string, amount: number) {
-    const w = this.get(userId)[asset];
+    const w = this.wallet(userId, asset);
     const n = Math.min(amount, w.locked);
     w.locked -= n;
     w.available += n;
   }
 
   spendLocked(userId: string, fromAsset: string, amount: number) {
-    const w = this.get(userId)[fromAsset];
-    w.locked -= amount;
+    this.wallet(userId, fromAsset).locked -= amount;
   }
 
   credit(userId: string, asset: string, amount: number) {
-    this.get(userId)[asset].available += amount;
+    this.wallet(userId, asset).available += amount;
   }
 
   toJSON() {

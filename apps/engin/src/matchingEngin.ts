@@ -27,20 +27,26 @@ interface Trade {
 
 export class Orderbook {
     private symbol:string;
+    private base:string; // e.g. "TATA"
+    private quote:string; // e.g. "INR"
     private bids: Order[] = []; // highest price first
     private asks: Order[] = []; // lowest price first
     private trades: Trade[] = [];
     private orders: Map<string, Order> = new Map();
-    readonly balances = new Balances();
+    readonly balances: Balances;
 
-    constructor(symbol:string = "TATA-INR") {
+    constructor(symbol:string, balances: Balances) {
         this.symbol = symbol;
+        const [base, quote] = symbol.split("-");
+        this.base = base;
+        this.quote = quote;
+        this.balances = balances;
     }
 
     addOrder(side:Side, price:number, quantity:number, userId:string, orderId = crypto.randomUUID()): {orderId:string, trades:Trade[]} {
         // lock funds before matching
-        if (side === Side.BUY) this.balances.lock(userId, "INR", price * quantity);
-        else this.balances.lock(userId, "TATA", quantity);
+        if (side === Side.BUY) this.balances.lock(userId, this.quote, price * quantity);
+        else this.balances.lock(userId, this.base, quantity);
 
         const order: Order = {
             orderId,
@@ -73,13 +79,12 @@ export class Orderbook {
     }
 
     private settle(buyerId:string, sellerId:string, price:number, qty:number, buyLimit:number) {
-        // buyer reserved buyLimit*qty; actual cost price*qty
-        this.balances.spendLocked(buyerId, "INR", price * qty);
-        this.balances.unlock(buyerId, "INR", (buyLimit - price) * qty);
-        this.balances.credit(buyerId, "TATA", qty);
+        this.balances.spendLocked(buyerId, this.quote, price * qty);
+        this.balances.unlock(buyerId, this.quote, (buyLimit - price) * qty);
+        this.balances.credit(buyerId, this.base, qty);
 
-        this.balances.spendLocked(sellerId, "TATA", qty);
-        this.balances.credit(sellerId, "INR", price * qty);
+        this.balances.spendLocked(sellerId, this.base, qty);
+        this.balances.credit(sellerId, this.quote, price * qty);
     }
 
     private matchBuy(buy:Order):Trade[]{
@@ -186,8 +191,8 @@ export class Orderbook {
         if(index !== -1){
             book.splice(index,1)
             this.orders.delete(orderId)
-            if (order.side === Side.BUY) this.balances.unlock(order.userId, "INR", order.price * order.remaining);
-            else this.balances.unlock(order.userId, "TATA", order.remaining);
+            if (order.side === Side.BUY) this.balances.unlock(order.userId, this.quote, order.price * order.remaining);
+            else this.balances.unlock(order.userId, this.base, order.remaining);
             return true
         }
         return false
@@ -231,17 +236,15 @@ export class Orderbook {
             asks: this.asks,
             trades: this.trades,
             orders: Array.from(this.orders.entries()),
-            balances: this.balances.toJSON(),
         };
     }
 
     loadSnapshot(snap: any) {
-        const s = snap.book ?? snap; // for multiple books
+        const s = snap.book ?? snap;
         this.symbol = s.symbol ?? this.symbol;
         this.bids = s.bids ?? [];
         this.asks = s.asks ?? [];
         this.trades = s.trades ?? [];
         this.orders = new Map(s.orders ?? []);
-        if (s.balances) this.balances.load(s.balances);
     }
 }

@@ -31,7 +31,10 @@ const app = new Elysia()
   })
   .options("/*", () => "")
   .get("/health", () => "ok")
-  .get("/depth", async () => toEngine("GET_DEPTH", {}))
+  .get("/markets", async () => toEngine("GET_MARKETS", {}))
+  .get("/depth", async ({ query }) => toEngine("GET_DEPTH", query), {
+    query: z.object({ symbol: z.string() }),
+  })
   .get("/balance", async ({ query }) => toEngine("GET_BALANCE", query), {
     query: z.object({ userId: z.string() }),
   })

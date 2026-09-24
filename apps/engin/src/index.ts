@@ -1,4 +1,5 @@
 import { createClient } from "redis";
+import { Balances } from "./balances";
 import { Orderbook, Side } from "./matchingEngin";
 import {
   appendEvent,
@@ -8,29 +9,66 @@ import {
   saveSnapshot,
 } from "./persist";
 
-const book = new Orderbook("TATA-INR");
+const MARKETS = ["TATA-INR", "ICICI-INR"];
+const balances = new Balances();
+const books: Record<string, Orderbook> = {};
+for (const m of MARKETS) books[m] = new Orderbook(m, balances);
+
+function book(symbol: string) {
+  const b = books[symbol];
+  if (!b) throw new Error(`unknown market: ${symbol}`);
+  return b;
+}
 
 function apply(type: string, data: any) {
   if (type === "CREATE_ORDER") {
-    return book.addOrder(data.side as Side, data.price, data.quantity, data.userId, data.orderId);
+    return book(data.symbol).addOrder(
+      data.side as Side,
+      data.price,
+      data.quantity,
+      data.userId,
+      data.orderId
+    );
   }
   if (type === "CANCEL_ORDER") {
-    return { success: book.cancleOrder(data.orderId) };
+    return { success: book(data.symbol).cancleOrder(data.orderId) };
   }
-  if (type === "GET_DEPTH") return book.depth();
-  if (type === "GET_BALANCE") return book.balances.get(data.userId);
+  if (type === "GET_DEPTH") return book(data.symbol).depth();
+  if (type === "GET_BALANCE") return balances.get(data.userId);
+  if (type === "GET_MARKETS") return MARKETS;
   return { error: "unknown type" };
 }
 
-function flush() {
-  saveSnapshot(book.getSnapshot());
-  clearEvents(); // snapshot has everything up to now
+function getEngineSnapshot() {
+  return {
+    balances: balances.toJSON(),
+    books: Object.fromEntries(
+      Object.entries(books).map(([k, b]) => [k, b.getSnapshot()])
+    ),
+  };
 }
 
-// --- boot: snapshot, then replay events since last snapshot ---
+function loadEngineSnapshot(snap: any) {
+  if (snap?.balances) balances.load(snap.balances);
+  if (snap?.books) {
+    for (const [sym, s] of Object.entries(snap.books) as [string, any][]) {
+      if (books[sym]) books[sym].loadSnapshot(s);
+    }
+  } else if (snap?.symbol && books[snap.symbol]) {
+    // old single-book snapshot
+    books[snap.symbol].loadSnapshot(snap);
+    if (snap.balances) balances.load(snap.balances);
+  }
+}
+
+function flush() {
+  saveSnapshot(getEngineSnapshot());
+  clearEvents();
+}
+
 const snap = loadSnapshot();
 if (snap) {
-  book.loadSnapshot(snap);
+  loadEngineSnapshot(snap);
   console.log("restored from snapshot");
 }
 const events = loadEvents();
@@ -62,9 +100,9 @@ while (true) {
     let broadcast = false;
 
     if (type === "CREATE_ORDER") {
-      data.orderId = crypto.randomUUID(); // stable id for replay
+      data.orderId = crypto.randomUUID();
       result = apply(type, data);
-      appendEvent({ type, data }); // log after success
+      appendEvent({ type, data });
       broadcast = true;
     } else if (type === "CANCEL_ORDER") {
       result = apply(type, data);
@@ -80,8 +118,8 @@ while (true) {
       await redis.publish(
         "ws",
         JSON.stringify({
-          symbol: "TATA-INR",
-          depth: book.depth(),
+          symbol: data.symbol,
+          depth: book(data.symbol).depth(),
           trades: type === "CREATE_ORDER" ? (result as { trades: unknown[] }).trades : [],
         })
       );
