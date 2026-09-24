@@ -1,20 +1,45 @@
 import { createClient } from "redis";
 import { Orderbook, Side } from "./matchingEngin";
-import { loadSnapshot, saveSnapshot } from "./persist";
+import {
+  appendEvent,
+  clearEvents,
+  loadEvents,
+  loadSnapshot,
+  saveSnapshot,
+} from "./persist";
 
 const book = new Orderbook("TATA-INR");
 
-// Step 1: restore if we have a snapshot
+function apply(type: string, data: any) {
+  if (type === "CREATE_ORDER") {
+    return book.addOrder(data.side as Side, data.price, data.quantity, data.userId, data.orderId);
+  }
+  if (type === "CANCEL_ORDER") {
+    return { success: book.cancleOrder(data.orderId) };
+  }
+  if (type === "GET_DEPTH") return book.depth();
+  if (type === "GET_BALANCE") return book.balances.get(data.userId);
+  return { error: "unknown type" };
+}
+
+function flush() {
+  saveSnapshot(book.getSnapshot());
+  clearEvents(); // snapshot has everything up to now
+}
+
+// --- boot: snapshot, then replay events since last snapshot ---
 const snap = loadSnapshot();
 if (snap) {
   book.loadSnapshot(snap);
   console.log("restored from snapshot");
 }
+const events = loadEvents();
+for (const ev of events) apply(ev.type, ev.data);
+if (events.length) console.log(`replayed ${events.length} events`);
 
-// save every 3s + on Ctrl+C
-setInterval(() => saveSnapshot(book.getSnapshot()), 3000);
+setInterval(flush, 3000);
 process.on("SIGINT", () => {
-  saveSnapshot(book.getSnapshot());
+  flush();
   console.log("saved snapshot");
   process.exit(0);
 });
@@ -37,17 +62,16 @@ while (true) {
     let broadcast = false;
 
     if (type === "CREATE_ORDER") {
-      result = book.addOrder(data.side as Side, data.price, data.quantity, data.userId);
+      data.orderId = crypto.randomUUID(); // stable id for replay
+      result = apply(type, data);
+      appendEvent({ type, data }); // log after success
       broadcast = true;
     } else if (type === "CANCEL_ORDER") {
-      result = { success: book.cancleOrder(data.orderId) };
+      result = apply(type, data);
+      appendEvent({ type, data });
       broadcast = true;
-    } else if (type === "GET_DEPTH") {
-      result = book.depth();
-    } else if (type === "GET_BALANCE") {
-      result = book.balances.get(data.userId);
     } else {
-      result = { error: "unknown type" };
+      result = apply(type, data);
     }
 
     await redis.lPush(`response:${clientId}`, JSON.stringify(result));

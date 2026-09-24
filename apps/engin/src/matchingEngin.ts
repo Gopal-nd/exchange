@@ -37,12 +37,11 @@ export class Orderbook {
         this.symbol = symbol;
     }
 
-    addOrder(side:Side, price:number, quantity:number, userId:string): {orderId:string, trades:Trade[]} {
+    addOrder(side:Side, price:number, quantity:number, userId:string, orderId = crypto.randomUUID()): {orderId:string, trades:Trade[]} {
         // lock funds before matching
         if (side === Side.BUY) this.balances.lock(userId, "INR", price * quantity);
         else this.balances.lock(userId, "TATA", quantity);
 
-        const orderId = crypto.randomUUID();
         const order: Order = {
             orderId,
             userId,
