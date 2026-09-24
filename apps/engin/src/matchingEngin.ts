@@ -224,4 +224,25 @@ export class Orderbook {
     getTrades():Trade[]{
         return [...this.trades];
     }
+
+    getSnapshot() {
+        return {
+            symbol: this.symbol,
+            bids: this.bids,
+            asks: this.asks,
+            trades: this.trades,
+            orders: Array.from(this.orders.entries()),
+            balances: this.balances.toJSON(),
+        };
+    }
+
+    loadSnapshot(snap: any) {
+        const s = snap.book ?? snap; // for multiple books
+        this.symbol = s.symbol ?? this.symbol;
+        this.bids = s.bids ?? [];
+        this.asks = s.asks ?? [];
+        this.trades = s.trades ?? [];
+        this.orders = new Map(s.orders ?? []);
+        if (s.balances) this.balances.load(s.balances);
+    }
 }

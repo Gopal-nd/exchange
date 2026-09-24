@@ -1,9 +1,8 @@
 type Wallet = { available: number; locked: number };
 
 export class Balances {
-  private users = new Map<string, Record<string, Wallet>>();// userId :{'INR':{available:100000,locked:0},'TATA':{available:1000,locked:0}}
+  private users = new Map<string, Record<string, Wallet>>();
 
-  /** Demo: every new user gets starting funds */
   private ensure(userId: string) {
     if (!this.users.has(userId)) {
       this.users.set(userId, {
@@ -32,7 +31,6 @@ export class Balances {
     w.available += n;
   }
 
-  /** Move locked → spent (gone), credit other asset to available */
   spendLocked(userId: string, fromAsset: string, amount: number) {
     const w = this.get(userId)[fromAsset];
     w.locked -= amount;
@@ -40,5 +38,13 @@ export class Balances {
 
   credit(userId: string, asset: string, amount: number) {
     this.get(userId)[asset].available += amount;
+  }
+
+  toJSON() {
+    return Array.from(this.users.entries());
+  }
+
+  load(entries: [string, Record<string, Wallet>][]) {
+    this.users = new Map(entries);
   }
 }
