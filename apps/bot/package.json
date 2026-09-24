@@ -1,0 +1,9 @@
+{
+  "name": "bot",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "mm": "bun run mm.ts",
+    "dev": "bun run mm.ts"
+  }
+}

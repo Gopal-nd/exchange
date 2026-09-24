@@ -52,15 +52,14 @@ export default function TradePage() {
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.type === "connected") return;
-      if (data.symbol === symbol) {
-        if (data.depth) qc.setQueryData(keys.depth(symbol), data.depth);
-        if (data.trades?.length) {
-          qc.setQueryData(keys.trades(symbol), (prev: Trade[] | undefined) =>
-            [...data.trades].reverse().concat(prev ?? []).slice(0, 30)
-          );
-        }
+      // Market data comes over WS — update cache only, no HTTP
+      if (data.symbol !== symbol) return;
+      if (data.depth) qc.setQueryData(keys.depth(symbol), data.depth);
+      if (data.trades?.length) {
+        qc.setQueryData(keys.trades(symbol), (prev: Trade[] | undefined) =>
+          [...data.trades].reverse().concat(prev ?? []).slice(0, 30)
+        );
       }
-      qc.invalidateQueries({ queryKey: keys.balance(userId) });
     };
     return () => ws.close();
   }, [symbol, userId, qc]);

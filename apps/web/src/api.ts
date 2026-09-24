@@ -71,14 +71,20 @@ const fetchers = {
 /* ── query hooks ───────────────────────────────────── */
 
 export function useMarkets() {
-  return useQuery({ queryKey: keys.markets, queryFn: fetchers.markets });
+  return useQuery({
+    queryKey: keys.markets,
+    queryFn: fetchers.markets,
+    staleTime: Infinity,
+  });
 }
 
+/** Initial HTTP fetch; live updates come from WS via setQueryData */
 export function useDepth(symbol: string) {
   return useQuery({
     queryKey: keys.depth(symbol),
     queryFn: () => fetchers.depth(symbol),
     enabled: !!symbol,
+    staleTime: Infinity,
   });
 }
 
@@ -87,6 +93,7 @@ export function useTrades(symbol: string) {
     queryKey: keys.trades(symbol),
     queryFn: () => fetchers.trades(symbol),
     enabled: !!symbol,
+    staleTime: Infinity,
   });
 }
 
@@ -95,6 +102,7 @@ export function useBalance(userId: string) {
     queryKey: keys.balance(userId),
     queryFn: () => fetchers.balance(userId),
     enabled: !!userId,
+    staleTime: 30_000,
   });
 }
 
@@ -156,9 +164,8 @@ export function usePlaceOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: PlaceOrderInput) => api.post("/order", body).then((r) => r.data),
-    onSuccess: (_data, { userId, symbol }) => {
-      qc.invalidateQueries({ queryKey: keys.depth(symbol) });
-      qc.invalidateQueries({ queryKey: keys.trades(symbol) });
+    onSuccess: (_data, { userId }) => {
+      // depth/trades arrive via WS; only refresh user-scoped data
       qc.invalidateQueries({ queryKey: keys.balance(userId) });
       qc.invalidateQueries({ queryKey: keys.openOrders(userId) });
       qc.invalidateQueries({ queryKey: keys.fills(userId) });
@@ -171,8 +178,7 @@ export function useCancelOrder() {
   return useMutation({
     mutationFn: ({ orderId, symbol }: { orderId: string; symbol: string }) =>
       api.delete("/order", { data: { orderId, symbol } }).then((r) => r.data),
-    onSuccess: (_data, { symbol }, _ctx) => {
-      qc.invalidateQueries({ queryKey: keys.depth(symbol) });
+    onSuccess: (_data, _vars, _ctx) => {
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["balance"] });
     },
